@@ -1040,14 +1040,54 @@ bool ReadBlockFromDisk(CBlock& block, const CBlockIndex* pindex, const Consensus
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
-    // Force block reward to zero when right shift is undefined.
-    if (halvings >= 64)
-        return 0;
+    // In -regtest mode use Bitcoin schedule
+    if (Params().MineBlocksOnDemand() && consensusParams.fPowAllowMinDifficultyBlocks) {
+        int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
+        // Force block reward to zero when right shift is undefined.
+        if (halvings >= 64)
+            return 0;
 
-    CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
-    nSubsidy >>= halvings;
+        CAmount nSubsidy = 50 * COIN;
+        // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
+        nSubsidy >>= halvings;
+        return nSubsidy;
+    }
+
+    // Viacoin schedule
+    CAmount nSubsidy = 0;
+
+    // different zero block period for testnet and mainnet
+    // mainnet not fixed until final release
+    int zeroRewardHeight = consensusParams.fPowAllowMinDifficultyBlocks ? 2001 : 10001;
+
+    int rampHeight = 43200 + zeroRewardHeight; // 4 periods of 10800
+
+    if (nHeight == 0) {
+        // no reward for genesis block
+        nSubsidy = 0;
+    } else if (nHeight == 1) {
+        // first distribution
+        nSubsidy = 10000000 * COIN;
+    } else if (nHeight <= zeroRewardHeight) {
+        // no block reward to allow difficulty to scale up and prevent instamining
+        nSubsidy = 0;
+    } else if (nHeight <= (zeroRewardHeight + 10800)) {
+        // first 10800 block after zero reward period is 10 coins per block
+        nSubsidy = 10 * COIN;
+    } else if (nHeight <= rampHeight) {
+        // every 10800 blocks reduce nSubsidy from 8 to 6
+        nSubsidy = (8 - int((nHeight-zeroRewardHeight-1) / 10800)) * COIN;
+    } else if (nHeight <= 1971000) {
+        nSubsidy = 5 * COIN;
+    } else { // (nHeight > 1971000)
+        int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
+        // Force block reward to zero when right shift is undefined.
+        if (halvings <= 64) {
+            nSubsidy = 20 * COIN;
+            nSubsidy >>= halvings;
+        }
+    }
+
     return nSubsidy;
 }
 
@@ -2989,9 +3029,8 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
         return state.Invalid(false, REJECT_INVALID, "time-too-new", "block timestamp too far in the future");
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
-    // check for version 2, 3 and 4 upgrades
-    if(((block.nVersion & 0xFF) < 2 && nHeight >= consensusParams.BIP34Height) ||
-       ((block.nVersion & 0xFF) < 3 && nHeight >= consensusParams.BIP66Height) ||
+    // check for version 3, 4 and 5 upgrades
+    if(((block.nVersion & 0xFF) < 3 && nHeight >= consensusParams.BIP66Height) ||
        ((block.nVersion & 0xFF) < 4 && nHeight >= consensusParams.BIP65Height) ||
        ((block.nVersion & 0xFF) < 5 && nHeight >= consensusParams.BlockVer5Height))
             return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
