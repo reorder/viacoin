@@ -1022,7 +1022,7 @@ bool ReadBlockFromDisk(CBlock& block, const CDiskBlockPos& pos, const Consensus:
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetPoWHash(), block.nBits, consensusParams))
+    if (!CheckBlockProofOfWork(&block, consensusParams))
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
 
     return true;
@@ -1611,17 +1611,22 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex* pindex, const Consens
     unsigned int flags = fStrictPayToScriptHash ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE;
 
     // Start enforcing the DERSIG (BIP66) rule
-    if (pindex->nHeight >= consensusparams.BIP66Height) {
+    if ((pindex->nVersion & 0xFF) < VERSIONBITS_TOP_BITS
+        && (pindex->nVersion & 0xff) >= 4
+        && pindex->nHeight >= consensusparams.BIP66Height) {
         flags |= SCRIPT_VERIFY_DERSIG;
     }
 
     // Start enforcing CHECKLOCKTIMEVERIFY (BIP65) rule
-    if (pindex->nHeight >= consensusparams.BIP65Height) {
+    if ((pindex->nVersion & 0xFF) < VERSIONBITS_TOP_BITS
+        && (pindex->nVersion & 0xff) >= 3
+        && pindex->nHeight >= consensusparams.BIP65Height) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     }
 
     // Start enforcing BIP68 (sequence locks) and BIP112 (CHECKSEQUENCEVERIFY) using versionbits logic.
-    if (VersionBitsState(pindex->pprev, consensusparams, Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
+    if (pindex->nHeight >= consensusparams.nWitnessStartHeight ||
+        VersionBitsState(pindex->pprev, consensusparams, Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
         flags |= SCRIPT_VERIFY_CHECKSEQUENCEVERIFY;
     }
 
@@ -1739,14 +1744,14 @@ static bool ConnectBlock(const CBlock& block, CValidationState& state, CBlockInd
         }
     }
 
-    // Start enforcing BIP68 (sequence locks) and BIP112 (CHECKSEQUENCEVERIFY) using versionbits logic.
-    int nLockTimeFlags = 0;
-    if (VersionBitsState(pindex->pprev, chainparams.GetConsensus(), Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
-        nLockTimeFlags |= LOCKTIME_VERIFY_SEQUENCE;
-    }
 
     // Get the script flags for this block
     unsigned int flags = GetBlockScriptFlags(pindex, chainparams.GetConsensus());
+    // Start enforcing BIP68 (sequence locks) and BIP112 (CHECKSEQUENCEVERIFY) using versionbits logic.
+    int nLockTimeFlags = 0;
+    if (flags & SCRIPT_VERIFY_CHECKSEQUENCEVERIFY) {
+        nLockTimeFlags |= LOCKTIME_VERIFY_SEQUENCE;
+    }
 
     int64_t nTime2 = GetTimeMicros(); nTimeForks += nTime2 - nTime1;
     LogPrint(BCLog::BENCH, "    - Fork checks: %.2fms [%.2fs]\n", 0.001 * (nTime2 - nTime1), nTimeForks * 0.000001);
@@ -1954,8 +1959,11 @@ bool static FlushStateToDisk(const CChainParams& chainparams, CValidationState &
                     vBlocks.push_back(*it);
                     setDirtyBlockIndex.erase(it++);
                 }
-                if (!pblocktree->WriteBatchSync(vFiles, nLastBlockFile, vBlocks)) {
+                if (!pblocktree->WriteBatchSync(vFiles, nLastBlockFile, vBlocks, mapDirtyAuxPow)) {
                     return AbortNode(state, "Failed to write to block index database");
+                }
+                for (std::vector<const CBlockIndex*>::const_iterator it = vBlocks.begin(); it != vBlocks.end(); it++) {
+                    mapDirtyAuxPow.erase((*it)->GetBlockHash());
                 }
             }
             // Finally remove any pruned files
@@ -2658,6 +2666,7 @@ static CBlockIndex* AddToBlockIndex(const CBlockHeader& block)
     if (pindexBestHeader == nullptr || pindexBestHeader->nChainWork < pindexNew->nChainWork)
         pindexBestHeader = pindexNew;
 
+    mapDirtyAuxPow.insert(std::make_pair(block.GetHash(), block.auxpow));
     setDirtyBlockIndex.insert(pindexNew);
 
     return pindexNew;
@@ -2677,6 +2686,7 @@ static bool ReceivedBlockTransactions(const CBlock &block, CValidationState& sta
     }
     pindexNew->RaiseValidity(BLOCK_VALID_TRANSACTIONS);
     setDirtyBlockIndex.insert(pindexNew);
+    mapDirtyAuxPow.insert(std::make_pair(block.GetHash(), block.auxpow));
 
     if (pindexNew->pprev == nullptr || pindexNew->pprev->nChainTx) {
         // If pindexNew is the genesis block or all parents are BLOCK_VALID_TRANSACTIONS.
@@ -2803,7 +2813,7 @@ static bool FindUndoPos(CValidationState &state, int nFile, CDiskBlockPos &pos, 
 static bool CheckBlockHeader(const CBlockHeader& block, CValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetPoWHash(), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckBlockProofOfWork(&block, consensusParams))
         return state.DoS(50, false, REJECT_INVALID, "high-hash", false, "proof of work failed");
 
     return true;
@@ -2875,7 +2885,9 @@ bool CheckBlock(const CBlock& block, CValidationState& state, const Consensus::P
 bool IsWitnessEnabled(const CBlockIndex* pindexPrev, const Consensus::Params& params)
 {
     LOCK(cs_main);
-    return (VersionBitsState(pindexPrev, params, Consensus::DEPLOYMENT_SEGWIT, versionbitscache) == THRESHOLD_ACTIVE);
+    const int nHeight = pindexPrev == nullptr ? 0 : pindexPrev->nHeight + 1;
+    return (nHeight >= params.nWitnessStartHeight ||
+            VersionBitsState(pindexPrev, params, Consensus::DEPLOYMENT_SEGWIT, versionbitscache) == THRESHOLD_ACTIVE);
 }
 
 // Compute at which vout of the block's coinbase transaction the witness
@@ -2942,6 +2954,17 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     assert(pindexPrev != nullptr);
     const int nHeight = pindexPrev->nHeight + 1;
 
+    // Check and validate auxpow
+    if (block.auxpow && block.auxpow.get() != nullptr)
+    {
+        if (nHeight < params.GetConsensus().nAuxPowStartHeight)
+            return state.DoS(100, error("%s : premature auxpow block", __func__),
+                             REJECT_INVALID, "time-too-new");
+        if (!CheckAuxPowValidity(&block, params.GetConsensus()))
+            return state.DoS(100, error("%s : invalid auxpow block", __func__),
+                             REJECT_INVALID, "bad-auxpow");
+    }
+
     // Check proof of work
     const Consensus::Params& consensusParams = params.GetConsensus();
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
@@ -2967,9 +2990,10 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     // check for version 2, 3 and 4 upgrades
-    if((block.nVersion < 2 && nHeight >= consensusParams.BIP34Height) ||
-       (block.nVersion < 3 && nHeight >= consensusParams.BIP66Height) ||
-       (block.nVersion < 4 && nHeight >= consensusParams.BIP65Height))
+    if(((block.nVersion & 0xFF) < 2 && nHeight >= consensusParams.BIP34Height) ||
+       ((block.nVersion & 0xFF) < 3 && nHeight >= consensusParams.BIP66Height) ||
+       ((block.nVersion & 0xFF) < 4 && nHeight >= consensusParams.BIP65Height) ||
+       ((block.nVersion & 0xFF) < 5 && nHeight >= consensusParams.BlockVer5Height))
             return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
                                  strprintf("rejected nVersion=0x%08x block", block.nVersion));
 
@@ -2982,7 +3006,8 @@ static bool ContextualCheckBlock(const CBlock& block, CValidationState& state, c
 
     // Start enforcing BIP113 (Median Time Past) using versionbits logic.
     int nLockTimeFlags = 0;
-    if (VersionBitsState(pindexPrev, consensusParams, Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
+    if (nHeight >= consensusParams.nWitnessStartHeight ||
+        VersionBitsState(pindexPrev, consensusParams, Consensus::DEPLOYMENT_CSV, versionbitscache) == THRESHOLD_ACTIVE) {
         nLockTimeFlags |= LOCKTIME_MEDIAN_TIME_PAST;
     }
 
