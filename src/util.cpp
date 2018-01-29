@@ -91,7 +91,7 @@ const char * const BITCOIN_CONF_FILENAME = "viacoin.conf";
 const char * const BITCOIN_PID_FILENAME = "viacoin.pid";
 
 ArgsManager gArgs;
-bool fPrintToConsole = true; // todo undo
+bool fPrintToConsole = false;
 bool fPrintToDebugLog = true;
 
 bool fLogTimestamps = DEFAULT_LOGTIMESTAMPS;
