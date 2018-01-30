@@ -267,9 +267,9 @@ public:
         consensus.nSubsidyHalvingInterval = 150;
         consensus.BIP34Height = -1; // BIP34 has not activated on regtest (far in the future so block v1 are not rejected in tests)
         consensus.BIP34Hash = uint256();
-        consensus.BIP65Height = 1; // BIP65 activated on regtest (Used in rpc activation tests)
-        consensus.BIP66Height = 1; // BIP66 activated on regtest (Used in rpc activation tests)
-        consensus.BlockVer5Height = 1;
+        consensus.BIP65Height = 1351; // BIP65 activated on regtest (Used in rpc activation tests)
+        consensus.BIP66Height = 1251; // BIP66 activated on regtest (Used in rpc activation tests)
+        consensus.BlockVer5Height = 1697078;
         consensus.powLimit = uint256S("efffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // ~uint25(0) >> 1
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 1 * 24;
