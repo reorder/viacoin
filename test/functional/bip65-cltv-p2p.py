@@ -21,7 +21,6 @@ CLTV_HEIGHT = 1351
 REJECT_INVALID = 16
 REJECT_OBSOLETE = 17
 REJECT_NONSTANDARD = 64
-VB_TOP_BITS = 0x80
 
 def cltv_invalidate(tx):
     '''Modify the signature in vin 0 of the tx to fail CLTV
@@ -91,7 +90,7 @@ class BIP65Test(BitcoinTestFramework):
         tip = self.nodes[0].getbestblockhash()
         block_time = self.nodes[0].getblockheader(tip)['mediantime'] + 1
         block = create_block(int(tip, 16), create_coinbase(CLTV_HEIGHT - 1), block_time)
-        block.nVersion = VB_TOP_BITS
+        block.nVersion = 3
         block.vtx.append(spendtx)
         block.hashMerkleRoot = block.calc_merkle_root()
         block.solve()
@@ -116,7 +115,7 @@ class BIP65Test(BitcoinTestFramework):
             del node0.last_message["reject"]
 
         self.log.info("Test that invalid-according-to-cltv transactions cannot appear in a block")
-        block.nVersion = VB_TOP_BITS
+        block.nVersion = 4
 
         spendtx = create_transaction(self.nodes[0], self.coinbase_blocks[1],
                 self.nodeaddress, 1.0)
@@ -147,7 +146,7 @@ class BIP65Test(BitcoinTestFramework):
             else:
                 assert b'Negative locktime' in node0.last_message["reject"].reason
 
-        self.log.info("Test that a version VB_TOP_BITS block with a valid-according-to-CLTV transaction is accepted")
+        self.log.info("Test that a version 4 block with a valid-according-to-CLTV transaction is accepted")
         spendtx = cltv_validate(self.nodes[0], spendtx, CLTV_HEIGHT - 1)
         spendtx.rehash()
 

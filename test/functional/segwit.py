@@ -115,13 +115,13 @@ class SegWitTest(BitcoinTestFramework):
         tmpl = self.nodes[0].getblocktemplate({})
         assert(tmpl['sizelimit'] == 1000000)
         assert('weightlimit' not in tmpl)
-        assert(tmpl['sigoplimit'] == 20000)
+        assert(tmpl['sigoplimit'] == 2000)
         assert(tmpl['transactions'][0]['hash'] == txid)
         assert(tmpl['transactions'][0]['sigops'] == 2)
         tmpl = self.nodes[0].getblocktemplate({'rules':['segwit']})
         assert(tmpl['sizelimit'] == 1000000)
         assert('weightlimit' not in tmpl)
-        assert(tmpl['sigoplimit'] == 20000)
+        assert(tmpl['sigoplimit'] == 2000)
         assert(tmpl['transactions'][0]['hash'] == txid)
         assert(tmpl['transactions'][0]['sigops'] == 2)
         self.nodes[0].generate(1) #block 162
@@ -230,7 +230,7 @@ class SegWitTest(BitcoinTestFramework):
         tmpl = self.nodes[0].getblocktemplate({'rules':['segwit']})
         assert(tmpl['sizelimit'] >= 3999577)  # actual maximum size is lower due to minimum mandatory non-witness data
         assert(tmpl['weightlimit'] == 4000000)
-        assert(tmpl['sigoplimit'] == 80000)
+        assert(tmpl['sigoplimit'] == 8000)
         assert(tmpl['transactions'][0]['txid'] == txid)
         assert(tmpl['transactions'][0]['sigops'] == 8)
 
