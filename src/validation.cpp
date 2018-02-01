@@ -1651,16 +1651,12 @@ static unsigned int GetBlockScriptFlags(const CBlockIndex* pindex, const Consens
     unsigned int flags = fStrictPayToScriptHash ? SCRIPT_VERIFY_P2SH : SCRIPT_VERIFY_NONE;
 
     // Start enforcing the DERSIG (BIP66) rule
-    if ((pindex->nVersion & 0xFF) < VERSIONBITS_TOP_BITS
-        && (pindex->nVersion & 0xff) >= 4
-        && pindex->nHeight >= consensusparams.BIP66Height) {
+    if (pindex->nHeight >= consensusparams.BIP66Height) {
         flags |= SCRIPT_VERIFY_DERSIG;
     }
 
     // Start enforcing CHECKLOCKTIMEVERIFY (BIP65) rule
-    if ((pindex->nVersion & 0xFF) < VERSIONBITS_TOP_BITS
-        && (pindex->nVersion & 0xff) >= 3
-        && pindex->nHeight >= consensusparams.BIP65Height) {
+    if (pindex->nHeight >= consensusparams.BIP65Height) {
         flags |= SCRIPT_VERIFY_CHECKLOCKTIMEVERIFY;
     }
 
