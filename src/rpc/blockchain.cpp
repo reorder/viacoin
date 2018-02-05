@@ -1092,10 +1092,10 @@ static UniValue SoftForkMajorityDesc(int version, CBlockIndex* pindex, const Con
             activated = pindex->nHeight >= consensusParams.BIP34Height;
             break;
         case 3:
-            activated = pindex->nHeight >= consensusParams.BIP66Height;
+            activated = pindex->nHeight >= consensusParams.BIP65Height;
             break;
         case 4:
-            activated = pindex->nHeight >= consensusParams.BIP65Height;
+            activated = pindex->nHeight >= consensusParams.BIP66Height;
             break;
         case 5:
             activated = pindex->nHeight >= consensusParams.BlockVer5Height;
@@ -1233,8 +1233,8 @@ UniValue getblockchaininfo(const JSONRPCRequest& request)
     UniValue softforks(UniValue::VARR);
     UniValue bip9_softforks(UniValue::VOBJ);
     softforks.push_back(SoftForkDesc("bip34", 2, tip, consensusParams));
-    softforks.push_back(SoftForkDesc("bip66", 3, tip, consensusParams));
-    softforks.push_back(SoftForkDesc("bip65", 4, tip, consensusParams));
+    softforks.push_back(SoftForkDesc("bip65", 3, tip, consensusParams));
+    softforks.push_back(SoftForkDesc("bip66", 4, tip, consensusParams));
     softforks.push_back(SoftForkDesc("ver5", 5, tip, consensusParams));
     BIP9SoftForkDescPushBack(bip9_softforks, "csv", consensusParams, Consensus::DEPLOYMENT_CSV);
     BIP9SoftForkDescPushBack(bip9_softforks, "segwit", consensusParams, Consensus::DEPLOYMENT_SEGWIT);

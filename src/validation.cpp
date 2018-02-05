@@ -2990,10 +2990,12 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     assert(pindexPrev != nullptr);
     const int nHeight = pindexPrev->nHeight + 1;
 
+    const Consensus::Params& consensusParams = params.GetConsensus();
+
     // Check and validate auxpow
     if (block.auxpow && block.auxpow.get() != nullptr)
     {
-        if (nHeight < params.GetConsensus().nAuxPowStartHeight)
+        if (nHeight < consensusParams.nAuxPowStartHeight)
             return state.DoS(100, error("%s : premature auxpow block", __func__),
                              REJECT_INVALID, "time-too-new");
         if (!CheckAuxPowValidity(&block, params.GetConsensus()))
@@ -3002,7 +3004,6 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
     }
 
     // Check proof of work
-    const Consensus::Params& consensusParams = params.GetConsensus();
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.DoS(100, false, REJECT_INVALID, "bad-diffbits", false, "incorrect proof of work");
 
@@ -3026,9 +3027,9 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, CValidationSta
 
     // Reject outdated version blocks when 95% (75% on testnet) of the network has upgraded:
     // check for version 3, 4 and 5 upgrades
-    if(((block.nVersion & 0xFF) < 3 && nHeight >= consensusParams.BIP66Height) ||
-       ((block.nVersion & 0xFF) < 4 && nHeight >= consensusParams.BIP65Height) ||
-       ((block.nVersion & 0xFF) < 5 && nHeight >= consensusParams.BlockVer5Height))
+    if(((block.nVersion & 0xFF) < VERSIONBITS_TOP_BITS && (block.nVersion & 0xFF) < 3 && nHeight >= consensusParams.BIP65Height) ||
+       ((block.nVersion & 0xFF) < VERSIONBITS_TOP_BITS && (block.nVersion & 0xFF) < 4 && nHeight >= consensusParams.BIP66Height) ||
+       ((block.nVersion & 0xFF) < VERSIONBITS_TOP_BITS && (block.nVersion & 0xFF) < 5 && nHeight >= consensusParams.BlockVer5Height))
             return state.Invalid(false, REJECT_OBSOLETE, strprintf("bad-version(0x%08x)", block.nVersion),
                                  strprintf("rejected nVersion=0x%08x block", block.nVersion));
 
