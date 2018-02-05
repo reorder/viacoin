@@ -1157,7 +1157,7 @@ void BIP9SoftForkDescPushBack(UniValue& bip9_softforks, const std::string &name,
 
 UniValue getblockchaininfo(const JSONRPCRequest& request)
 {
-    if (request.fHelp || request.params.size() != 0)
+    if (request.fHelp || request.params.size() > 1)
         throw std::runtime_error(
             "getblockchaininfo\n"
             "Returns an object containing various state info regarding blockchain processing.\n"
@@ -1218,7 +1218,18 @@ UniValue getblockchaininfo(const JSONRPCRequest& request)
     obj.push_back(Pair("pruned",                fPruneMode));
 
     const Consensus::Params& consensusParams = Params().GetConsensus();
-    CBlockIndex* tip = chainActive.Tip();
+    CBlockIndex* tip;
+    if (request.params.size() > 0) {
+        std::string strHash = request.params[0].get_str();
+        uint256 hash(uint256S(strHash));
+
+        if (mapBlockIndex.count(hash) == 0)
+            throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Block not found");
+
+        tip  = mapBlockIndex[hash];
+    } else {
+        tip = chainActive.Tip();
+    }
     UniValue softforks(UniValue::VARR);
     UniValue bip9_softforks(UniValue::VOBJ);
     softforks.push_back(SoftForkDesc("bip34", 2, tip, consensusParams));

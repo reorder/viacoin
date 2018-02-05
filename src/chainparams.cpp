@@ -78,8 +78,8 @@ public:
         consensus.nSubsidyHalvingInterval = 657000;
         consensus.BIP34Height = 0;
         consensus.BIP34Hash = uint256S("0x4e9b54001f9976049830128ec0331515eaabe35a70970d79971da1539a400ba1");
-        consensus.BIP65Height = 598725; // e5c7b7ae69ed868e90a69217e14c4be51a7ed59276cda2f1ebbc611145c56933
-        consensus.BIP66Height = 1236695; // 6b0b3aeeed4fc7f2841148699b23b230366c28a23d28b499c30070c516310977
+        consensus.BIP65Height = 1236695;
+        consensus.BIP66Height = 563595;
         consensus.BlockVer5Height = 1697078;
         consensus.powLimit = uint256S("000001ffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"); // ~uint25(0) >> 23
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
@@ -176,8 +176,8 @@ public:
         consensus.nSubsidyHalvingInterval = 657000;
         consensus.BIP34Height = -1;
         consensus.BIP34Hash = uint256S("0x0");
-        consensus.BIP65Height = 502664;
-        consensus.BIP66Height = 800000;
+        consensus.BIP65Height = 800000;
+        consensus.BIP66Height = 502664;
         consensus.BlockVer5Height = 1800000;
         consensus.powLimit = uint256S("00001fffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 3.5 * 24 * 60 * 60; // 3.5 days
